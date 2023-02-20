@@ -1,0 +1,59 @@
+# refer: https://jfrog.com/blog/pulling-all-your-kubernetes-cluster-images-from-a-private-artifactory-registry/
+# create the secret first for jfrog authentication
+# kubectl create secret docker-registry regcred \
+# --docker-server=my-artifactory.jfrog.io \
+# --docker-username=read-only \
+# --docker-password=my-super-secret-pass \
+# --docker-email=johndoe@example.com \
+# -n my-app-ns
+#
+# secret/regcred created
+
+# Patch the default service account to include the imagePullSecrets section.
+# By default a service account named default automatically gets created with each namespace and all workloads will automatically use it.
+
+# kubectl edit serviceaccount default -n my-app-ns
+apiVersion: v1
+kind: ServiceAccount
+imagePullSecrets:
+- name: regcred
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e2esa-webapp01-deployment
+  namespace: dev-webapp01
+  labels:
+    app: e2esa-webapp01
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: e2esa-webapp01
+  template:
+    metadata:
+      labels:
+        app: e2esa-webapp01
+    spec:
+      containers:
+      - name: my-app
+        image: my-artifactory.jfrog.io/default-docker-virtual/my-app:1.0.1
+        imagePullPolicy: Always
+        imagePullSecrets:
+        - name: regcred
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: e2esa-webapp01-ns
+  name: e2esa-webapp01-service
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: e2esa-webapp01
